@@ -88,6 +88,7 @@ void setup() {
       display.drawPixel(x, y, 1);
     }
   }
+  display.drawString(0, 10, "SSD1315 Demo");
   display.display();
   while (true) {
     for (int b = 0x00; b < 0xFF; b += 2) {
