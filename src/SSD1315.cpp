@@ -70,10 +70,10 @@ void SSD1315::sleep(bool en){
 }
 
 void SSD1315::drawPixel(int x,int y,uint8_t color){
-    switch(_rotation&3){
-        case 1: {int t=x; x=SSD1315_WIDTH-1-y; y=t; break;}
-        case 2: x=SSD1315_WIDTH-1-x; y=SSD1315_HEIGHT-1-y; break;
-        case 3: {int t=x; x=y; y=SSD1315_HEIGHT-1-t; break;}
+    switch(_rotation & 3){
+        case 1: {int t = x; x = y; y = SSD1315_WIDTH - 1 - t; break;}
+        case 2: x = SSD1315_WIDTH - 1 - x; y = SSD1315_HEIGHT - 1 - y; break;
+        case 3: {int t = x; x = SSD1315_HEIGHT - 1 - y; y = t; break;}
     }
     if(x<0||x>=SSD1315_WIDTH||y<0||y>=SSD1315_HEIGHT)return;
     uint16_t i=x+(y/8)*SSD1315_WIDTH;
@@ -106,35 +106,52 @@ void SSD1315::drawBitmap(uint8_t x,uint8_t y,const uint8_t* bmp,uint8_t w,uint8_
 }
 
 void SSD1315::drawChar(uint8_t x,uint8_t y,char c,uint8_t size,bool invert){
-    const uint8_t* font;
-    uint8_t width;
-    if(size<=5){
-        font=&Font0508[c-' '][0];
-        width=5;
-    }else if(size==12){
-        font=&Font1206[c-' '][0];
-        width=12;
-    }else{
-        font=&Font1608[c-' '][0];
-        width=16;
+    if(size <= 5){
+        const uint8_t *font = &Font0508[c - ' '][0];
+        for(uint8_t i = 0; i < 5; i++){
+            uint8_t line = pgm_read_byte(font + i);
+            for(uint8_t j = 0; j < 8; j++){
+                bool pix = line & 0x01;
+                if(invert) pix = !pix;
+                drawPixel(x + i, y + j, pix ? 1 : 0);
+                line >>= 1;
+            }
+        }
+        return;
     }
-    for(uint8_t i=0;i<width;i++){
-        uint8_t line=pgm_read_byte(font+i);
-        for(uint8_t j=0;j<8;j++){
-            bool pix=line&0x80;
-            if(invert) pix=!pix;
-            drawPixel(x+i,y+j,pix?1:0);
-            line<<=1;
+
+    const uint8_t *font = (size == 12) ? &Font1206[c - ' '][0]
+                                       : &Font1608[c - ' '][0];
+    uint8_t y0 = y;
+    for(uint8_t i = 0; i < size; i++){
+        uint8_t temp = pgm_read_byte(font + i);
+        for(uint8_t j = 0; j < 8; j++){
+            bool pix = temp & 0x80;
+            if(invert) pix = !pix;
+            drawPixel(x, y, pix ? 1 : 0);
+            temp <<= 1;
+            y++;
+            if((y - y0) == size){
+                y = y0;
+                x++;
+                break;
+            }
         }
     }
 }
 
 void SSD1315::drawString(uint8_t x,uint8_t y,const char* s,uint8_t size,bool invert){
-    uint8_t advance=(size<=5)?5:(size/2);
+    uint8_t advance = (size <= 5) ? 5 : size / 2;
     while(*s){
-        if(x>(SSD1315_WIDTH-advance)){x=0;y+=size;if(y>(SSD1315_HEIGHT-size))y=0;}
-        drawChar(x,y,*s,size,invert);
-        x+=advance; s++;}
+        if(x > (SSD1315_WIDTH - advance)){
+            x = 0;
+            y += size;
+            if(y > (SSD1315_HEIGHT - size)) y = 0;
+        }
+        drawChar(x, y, *s, size, invert);
+        x += advance;
+        s++;
+    }
 }
 
 void SSD1315::display(){
