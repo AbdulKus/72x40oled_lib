@@ -21,6 +21,9 @@ public:
     void clear();
     void fill(uint8_t color);
     void display();
+    void setRotation(uint8_t r);
+    void setBrightness(uint8_t level);
+    void sleep(bool enable);
     void drawPixel(int x,int y,uint8_t color);
     void drawRect(uint8_t x0,uint8_t y0,uint8_t x1,uint8_t y1,bool fill=false,bool invert=false);
     void drawBitmap(uint8_t x,uint8_t y,const uint8_t* bmp,uint8_t w,uint8_t h,bool invert=false);
@@ -29,6 +32,7 @@ public:
     uint8_t* getBuffer();
 private:
     uint8_t _rst;
+    uint8_t _rotation;
     uint8_t buffer[SSD1315_WIDTH*SSD1315_HEIGHT/8];
     void command(uint8_t c);
     void data(uint8_t d);
@@ -38,6 +42,7 @@ extern const uint8_t Font1612[11][32] PROGMEM;
 extern const uint8_t Font1206[95][12] PROGMEM;
 extern const uint8_t Font1608[95][16] PROGMEM;
 extern const uint8_t Font3216[11][64] PROGMEM;
+extern const uint8_t Font0508[95][5] PROGMEM;
 extern const uint8_t PIC1[] PROGMEM;
 extern const uint8_t PIC2[] PROGMEM;
 extern const uint8_t Signal816[16] PROGMEM;
