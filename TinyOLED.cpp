@@ -126,44 +126,42 @@ const uint8_t Font1206[95][12] PROGMEM = {
   { 0x40, 0x00, 0x80, 0x00, 0x40, 0x00, 0x20, 0x00, 0x20, 0x00, 0x40, 0x00 }, /*"~",94*/
 };
 
-TinyOLED::TinyOLED() {
-  _cursorX = 0;
-  _cursorY = 0;
+TinyOLED::TinyOLED() : _cursorX(0), _cursorY(0) {
+  memset(_buffer, 0, sizeof(_buffer));
 }
 
 void TinyOLED::begin(uint8_t address) {
   _address = address;
   Wire.begin();
 
-  sendCommand(SSD1306_DISPLAYOFF);
-  sendCommand(SSD1306_SETLOWCOLUMN | 0x04);
-  sendCommand(SSD1306_SETHIGHCOLUMN | 0x01);
-  sendCommand(SSD1306_SETSTARTLINE | 0x00);
-  sendCommand(SSD1306_SETCONTRAST);
-  sendCommand(0x8F);
-  sendCommand(SSD1306_SEGREMAP | 0x01);
-  sendCommand(SSD1306_NORMALDISPLAY);
-  sendCommand(SSD1306_SETMULTIPLEX);
-  sendCommand(0x27);
-  sendCommand(SSD1306_DISPLAYALLON_RESUME);
-  sendCommand(SSD1306_SETDISPLAYOFFSET);
-  sendCommand(0x00);
-  sendCommand(SSD1306_SETDISPLAYCLOCKDIV);
+  sendCommand(0xAE); // display off
+  sendCommand(0xD5); // clock
   sendCommand(0x80);
-  sendCommand(SSD1306_SETPRECHARGE);
-  sendCommand(0xF1);
-  sendCommand(SSD1306_SETCOMPINS);
-  sendCommand(0x12);
-  sendCommand(SSD1306_SETVCOMDETECT);
-  sendCommand(0x40);
-  sendCommand(SSD1306_MEMORYMODE);
-  sendCommand(0x02);
-  sendCommand(SSD1306_CHARGEPUMP);
+  sendCommand(0xA8); // multiplex
+  sendCommand(0x27);
+  sendCommand(0xD3); // offset
+  sendCommand(0x00);
+  sendCommand(0xAD); // internal IREF
+  sendCommand(0x30);
+  sendCommand(0x8D); // charge pump
   sendCommand(0x14);
-  sendCommand(SSD1306_COMSCANDEC);
-  sendCommand(SSD1306_DISPLAYON);
+  sendCommand(0x40); // start line
+  sendCommand(0xA6); // normal display
+  sendCommand(0xA4); // display RAM
+  sendCommand(0xA1); // seg remap
+  sendCommand(0xC8); // com scan dir
+  sendCommand(0xDA); // com pins
+  sendCommand(0x12);
+  sendCommand(0x81); // contrast
+  sendCommand(0xAF);
+  sendCommand(0xD9); // precharge
+  sendCommand(0x22);
+  sendCommand(0xDB); // vcomh
+  sendCommand(0x20);
+  sendCommand(0xAF); // display on
 
   clear();
+  update();
 }
 
 void TinyOLED::sendCommand(uint8_t cmd) {
@@ -180,100 +178,39 @@ void TinyOLED::sendData(uint8_t data) {
   Wire.endTransmission();
 }
 
-void TinyOLED::setColumnAddress(uint8_t start, uint8_t end) {
-  sendCommand(SSD1306_COLUMNADDR);
-  sendCommand(start + 28);
-  sendCommand(end + 28);
-}
-
-void TinyOLED::setPageAddress(uint8_t start, uint8_t end) {
-  sendCommand(SSD1306_PAGEADDR);
-  sendCommand(start);
-  sendCommand(end);
-}
-
 void TinyOLED::clear() {
   fill(0x00);
 }
 
 void TinyOLED::fill(uint8_t pattern) {
-  for (uint8_t page = 0; page < OLED_PAGES; page++) {
-    sendCommand(SSD1306_SETPAGE | page);
-    sendCommand(SSD1306_SETLOWCOLUMN | 0x04);
-    sendCommand(SSD1306_SETHIGHCOLUMN | 0x01);
-
-    for (uint8_t col = 0; col < OLED_WIDTH; col++) {
-      sendData(pattern);
-    }
+  for (uint16_t i = 0; i < sizeof(_buffer); i++) {
+    _buffer[i] = pattern;
   }
+  update();
 }
 
 void TinyOLED::drawPixel(uint8_t x, uint8_t y, uint8_t color) {
   if (x >= OLED_WIDTH || y >= OLED_HEIGHT) return;
-
-  uint8_t page = y / 8;
-  uint8_t bit = y % 8;
-  uint8_t col = x + 28;
-
-  sendCommand(SSD1306_SETPAGE | page);
-  sendCommand(SSD1306_SETLOWCOLUMN | (col & 0x0F));
-  sendCommand(SSD1306_SETHIGHCOLUMN | (col >> 4));
-
-  uint8_t data = color ? (1 << bit) : 0;
-  sendData(data);
+  uint16_t index = x + (y / 8) * OLED_WIDTH;
+  if (color)
+    _buffer[index] |= (1 << (y % 8));
+  else
+    _buffer[index] &= ~(1 << (y % 8));
 }
 
-void TinyOLED::drawRect(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t fill, uint8_t invert) {
-  if (x1 > x2) {
-    uint8_t temp = x1;
-    x1 = x2;
-    x2 = temp;
-  }
-  if (y1 > y2) {
-    uint8_t temp = y1;
-    y1 = y2;
-    y2 = temp;
-  }
-
+void TinyOLED::drawRect(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, bool fill, bool invert) {
+  if (x1 > x2) { uint8_t t = x1; x1 = x2; x2 = t; }
+  if (y1 > y2) { uint8_t t = y1; y1 = y2; y2 = t; }
   if (x2 >= OLED_WIDTH) x2 = OLED_WIDTH - 1;
   if (y2 >= OLED_HEIGHT) y2 = OLED_HEIGHT - 1;
 
-  uint8_t startPage = y1 / 8;
-  uint8_t endPage = y2 / 8;
-
-  for (uint8_t page = startPage; page <= endPage; page++) {
-    sendCommand(SSD1306_SETPAGE | page);
-
-    uint8_t startBit = (page == startPage) ? (y1 % 8) : 0;
-    uint8_t endBit = (page == endPage) ? (y2 % 8) : 7;
-
-    uint8_t mask = 0;
-    for (uint8_t bit = startBit; bit <= endBit; bit++) {
-      mask |= (1 << bit);
-    }
-
+  for (uint8_t y = y1; y <= y2; y++) {
     for (uint8_t x = x1; x <= x2; x++) {
-      uint8_t col = x + 28;
-      sendCommand(SSD1306_SETLOWCOLUMN | (col & 0x0F));
-      sendCommand(SSD1306_SETHIGHCOLUMN | (col >> 4));
-
-      uint8_t data = 0;
-
-      if (fill || x == x1 || x == x2 || page == startPage || page == endPage) {
-        if ((x == x1 || x == x2) && !fill) {
-          data = mask;
-        } else if (page == startPage && !fill) {
-          data = (1 << startBit);
-          if (page == endPage) data |= (1 << endBit);
-        } else if (page == endPage && !fill) {
-          data = (1 << endBit);
-        } else {
-          data = mask;
-        }
-      }
-
-      if (invert) data = ~data;
-      sendData(data);
+      bool edge = (x == x1 || x == x2 || y == y1 || y == y2);
+      bool on = fill ? true : edge;
+      uint8_t color = on ? 1 : 0;
+      if (invert) color = !color;
+      drawPixel(x, y, color);
     }
   }
 }
@@ -285,49 +222,50 @@ void TinyOLED::setCursor(uint8_t x, uint8_t y) {
 
 void TinyOLED::testPattern() {
   for (uint8_t page = 0; page < OLED_PAGES; page++) {
-    sendCommand(SSD1306_SETPAGE | page);
     for (uint8_t col = 0; col < OLED_WIDTH; col++) {
-      sendCommand(SSD1306_SETLOWCOLUMN | (col & 0x0F));
-      sendCommand(SSD1306_SETHIGHCOLUMN | (col >> 4));
-      sendData(col); // будет градиент от 0 до 72
+      _buffer[col + page * OLED_WIDTH] = col;
     }
   }
+  update();
 }
 
-void TinyOLED::drawText(uint8_t x, uint8_t y, const char* text, uint8_t font, uint8_t invert) {
+void TinyOLED::drawText(uint8_t x, uint8_t y, const char* text, bool invert) {
   setCursor(x, y);
 
   while (*text) {
-    uint8_t charHeight = 8;
-    uint8_t charWidth = 12;
-
-    if (_cursorX + charWidth > OLED_WIDTH) {
+    if (_cursorX + 12 > OLED_WIDTH) {
       _cursorX = 0;
-      _cursorY += charHeight;
+      _cursorY += 8;
     }
-
     if (_cursorY >= OLED_HEIGHT) break;
 
-    uint8_t c = *text - 32;
-    if (c > 95) c = 0;
-
-    uint8_t page = _cursorY / 8;
-    sendCommand(SSD1306_SETPAGE | page);
-
-      // Font1206
-    for (uint8_t i = 0; i < charWidth; i++) {
-      uint8_t col = _cursorX + i + 28;
-      sendCommand(SSD1306_SETLOWCOLUMN | (col & 0x0F));
-      sendCommand(SSD1306_SETHIGHCOLUMN | (col >> 4));
-      uint8_t data = pgm_read_byte(&Font1206[c][i]);
-      if (invert) data = ~data;
-      sendData(data);
-    }
-
-    _cursorX += charWidth + 1;
+    drawChar(_cursorX, _cursorY, *text, invert);
+    _cursorX += 12;
     text++;
   }
+  update();
 }
 
 void TinyOLED::update() {
+  for (uint8_t page = 0; page < OLED_PAGES; page++) {
+    sendCommand(0xB0 + page);
+    sendCommand(0x0c);
+    sendCommand(0x11);
+    for (uint8_t i = 0; i < OLED_WIDTH; i++) {
+      sendData(_buffer[i + page * OLED_WIDTH]);
+    }
+  }
+}
+
+void TinyOLED::drawChar(uint8_t x, uint8_t y, char ch, bool invert) {
+  uint8_t c = ch - 32;
+  if (c > 95) return;
+  for (uint8_t i = 0; i < 12; i++) {
+    uint8_t line = pgm_read_byte(&Font1206[c][i]);
+    if (invert) line = ~line;
+    for (uint8_t j = 0; j < 8; j++) {
+      drawPixel(x + i, y + j, (line & 0x80) ? 1 : 0);
+      line <<= 1;
+    }
+  }
 }
