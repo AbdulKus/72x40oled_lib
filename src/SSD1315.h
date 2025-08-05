@@ -8,7 +8,11 @@
 #else
 #include <Wire.h>
 #endif
+#if defined(AVR)
 #include <avr/pgmspace.h>
+#else  //defined(AVR)
+#include <pgmspace.h>
+#endif  //defined(AVR)
 
 #define SSD1315_WIDTH 72
 #define SSD1315_HEIGHT 40
